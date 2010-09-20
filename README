@@ -1,0 +1,68 @@
+=== A Webcam Client/Server Daemon
+
+This project fulfills a bunch of small tasks that have bothered me for
+quite some time. I set up a lot of webcams here and there of
+different sorts and pedigrees.
+
+Most webcams assume that you basically proxy them through your
+firewall directly and then external users will go to these proxies
+webcams for all access to them.
+
+Here I mean 'webcam' to be some video camera connected via a network
+connection whose main interface is HTTP based (although some of these,
+like the hawking 210's the control interface is http based, and the
+actual image stream is via a simplistic custom protocol.)
+
+This never satisifed me. Being a bit of an OCD personality I wanted to
+have my own web site present the interface to these webcams.
+
+I also wanted the ability to at any time ask for the past minute of
+video from any of the actively monitored webcams.
+
+So this is a server and set of clients that will talk to several
+different webcams and present an interface other systems can talk to
+to get a single frame, a video stream, status, and one minute history
+from any controlled webcam.
+
+Modern webcams are a lot more powerful and can actually stream mp4
+encoded data instead of the ancient and hackish motion-jpeg
+streams. However, in this initial version I am going leave all video
+streams as basically a bunch of messages, one image in each message,
+most likely always in jpg.
+
+Also, I have long wanted to play with zero-mq and protocol buffers and
+they seemed to fit the basics of this project.
+
+=== Basic Use Cases
+
+o You have a server configuration. It lists the webcams you want to
+  control, their addresses, what type they are, and any authentication
+  they may need to give get video from them.
+
+o The server offers two interfaces:
+
+  A REQ/REP where you send a request and get back a response.
+
+  The requests supported are:
+
+  o list status of controlled webcams as well as their status and other info.
+  o get a current frame from a specific webcam
+  o get a current frame from all controlled webcams
+  o get the past minute of frames from a specific webcam
+    Yes, you get a set of frames. I figured re-encoding this in to a
+    video should be the job of whoever gets the frames. That way they
+    get to decide what to re-encode it into.
+  o re-read configuration file
+  o idle a specific webcam
+  o re-activate an idled webcam
+  o exit
+
+  The second interface is a PUB/SUB interface. You connect to it and
+  subscribe to a specific webcam. You will then get a continuous
+  stream of image messages from that webcam.
+
+=== Message format
+
+I am using protocol buffers.. so see the .proto file included in this
+project.
+

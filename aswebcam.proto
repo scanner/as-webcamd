@@ -1,0 +1,240 @@
+// Basic image.. contains a type which defaults to jpeg, when it was
+// taken, and the actual image data.
+//
+// I thought about making the type be a mime-type string but figured
+// the types we were likely to see were very simple and I would be
+// surprised if it was anything but a jpeg so just going to make it a
+// simple enum.
+//
+message Image 
+{
+  enum ImageType 
+  {
+    JPG = 0;
+    PNG = 1;
+    TIFF = 2;
+    GIF = 3;
+  }
+  optional uint32 image_type = 1 [default = JPG];
+  optional bytes image = 2;
+  optional TimeStamp utc_timestamp = 3;
+}
+
+// I argued with myself for about 10 minutes over the
+// timestamp.. since in the future the actual webcam clients may be
+// simple C code I opted to not use a fancy string format that could
+// accept any time and just went with a seconds / microseconds
+// structure. I am not sure if I should be using 32 bit seconds or
+// 64bit.. but for now I am going to save the 4 bytes per timestamp.
+//
+message TimeStamp 
+{
+  optional secs fixed32 = 1;
+  optional u_secs fixed32 = 2;
+}
+
+// Basically only used by our 'list webcams' command. I think I am
+// going to get rid of the 'id' and just require the server to deal
+// with webcams by their name. Names will need to be unique within a server.
+//
+message WebCam
+{
+  optional id uint32 = 1;
+  optional string host = 2;
+  optional string name = 3;
+  optional bool activated = 4;
+  optional string vendor = 5;
+  optional string model = 6;
+  optional TimeStamp uptime = 7;
+
+  // Number of frames we have received from this webcam.
+  //
+  optional uint64 number_of_frames = 8;
+}
+
+// A movie is just a sequences of frames. I debated whether I should
+// give the 'end time' or the 'duration' of the movie. I decided on
+// 'end time' because that way both the start and end times were just
+// copies out of the first and last image.
+//
+message Movie 
+{
+  optional TimeStamp start = 1;
+  optional TimeStamp end = 2;
+  optional uint32 number_of_frames = 3;
+  repeated Image frames = 4;
+}
+
+// Since we can get a bunch of responses in a single request for
+// frames from all webcams you will need to know which webcam a
+// specific frame belongs to. The same for movies.
+//
+message CamImage 
+{
+  optional string name = 1;
+  optional Image image = 2;
+}
+
+message CamMovie
+{
+  optional string name = 1;
+  optional Movie movie = 2;
+}
+
+// For the REQ/REP interface.. all of the commands that the client can
+// send are containd in 'Request' structure. It has a lot of optional
+// and submessage parts to handle the necessar arguments for each
+// possible command.
+//
+// For activate/deactivate webcam I use a substructure because I may
+// want to have a lot more things I can do with webcam clients like
+// set resolution, direction, fps, turn a port on or off,
+// etc. Granted, 'activate' and 'deactivate' are kind of at the
+// meta-level.
+//
+// XXX I wonder if I will have enough sub-commands for the actual
+//     server configuration where I want to have its own substructure.
+//     But not enough types now to make that distinction.
+//
+message Request
+{
+  enum Command 
+  {
+    LIST_WEBCAMS = 0;
+    GET_FRAME = 1;
+    GET_HISTORY = 2;
+    RELOAD_CONFIG = 3;
+    CONTROL_WEBCAM = 4;
+    SHUTDOWN = 5;
+  }
+  optional Command command = 1;
+  // The name or pattern of which webcam this command is to apply to.
+  //
+  optional string webcam = 2;
+  message WebcamControl
+  {
+    // True to activate a webcam, false to deactivate. not specified to do
+    // neither
+    //
+    optional bool activate = 1;
+  }
+  optional WebcamControl webcam_control = 3;
+}
+
+// A generic status/error structure used by all of our response like objects.
+// Thinking something like "0" for all okay, and then various integers
+// for different kinds of errors.
+//
+message Status
+{
+  optional uint32 code = 1;
+  optional string msg = 2;
+}
+
+// I am new to protocol buffers.. I am not sure if I should have a
+// response message for each possible request or like I have now a
+// response message that contains a bunch of optional sections. I am
+// going with this approach that way every message can have an
+// optional error section.
+//
+message Response 
+{
+  // The command that this is in response to.
+  //
+  // XXX Do we really need this? It is all going to be "request foo
+  //     wait for reply bar"
+  //
+  optional Request request = 1;
+
+  // When the server sends out the message.
+  //
+  // XXX Again do we need this? Will there be enough lag that we need
+  //     to tell the client when we tried to send the message?
+  //
+  optional TimeStamp when = 2;
+  optional Status status = 3;
+  repeated CamImage images = 4;
+  repeated CamMovie movies = 5;
+  repeated WebCam webcams = 6;
+}
+
+
+//******************************************************************
+//
+// These message types are for communication between the webcamd
+// server and the webcam clients. We basically fork off a separate
+// process for each webcam client and then the server communicates
+// with them via these commands.
+//
+//
+message WebcamRequest 
+{
+  enum Command 
+  {
+    // Stop capturing frames and sending them to us.
+    //
+    PAUSE = 0;
+    // Start capturing frames and sending them to us.
+    //
+    UNPAUSE = 1;
+    SHUTDOWN = 2;
+    // The configuration message for webcam client.
+    //
+    // XXX I am not sure if this should be sent over the req/rep
+    //     command and control connection or if it should be sent over
+    //     some other startup channel like stdin from the parent
+    //     launching webcam server process.
+    //
+    //     Although I guess this could be useful for reconfiguring a
+    //     webcam client.. but really we should just shut this one
+    //     done and create a new one in that case.
+    CONFIG = 3;
+  }
+  optional Command command = 1;
+  optional WebcamConfig config = 2;
+}
+
+// We need some way to tell the webcam client what kind of webcam it
+// is going to talk to, where that webcam is, any auth info it needs,
+// and maybe even a URL to use.
+//
+// I am seeing the webcam client starting up, but not doing anything
+// until it gets this message.
+//
+// XXX Not sure if this is sent to the webcam on its standard input
+//     when it is forked by the webcam server, or the first message sent
+//     to its command and control req/rep socket.
+//
+// XXX In the future we may have specific binaries for specific
+//     webcams and in those cases the type information for the webcam
+//     will be unnecessary.
+message WebcamConfig 
+{
+  // The complete string we need to switch on to determine what logic
+  // to use to talk to this webcam.
+  //
+  optional string webcam_type = 1;
+  // Can be a dns name or IP address.
+  //
+  optional string hostname = 2;
+
+  // If several different webcams have the exact same logic for
+  // getting a stream of images, but just different URL's we will can
+  // put the URL here (putting the burden on the server to know what
+  // url's to use for which webcams.. in general the client will know
+  // this, but if there was some reason to have this here..)
+  //
+  // XXX do we really need or want this? The right thing is probably
+  //     to have the cam specific logic know what url to use. Maybe if we
+  //     had some weird webcam like thing that had multiple cameras, and
+  //     different url's for different cameras..
+  optional string url = 3;
+  
+  // every web cam gets a unique name (that is likely to be the same
+  // as its hostname) and we tell this webcam what it is in case
+  // anything it does needs to have that info.
+  //
+  optional string name = 4;
+  optional string username = 5;
+  optional string password = 6;
+}
