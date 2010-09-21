@@ -24,6 +24,13 @@ from ConfigParser import SafeConfigParser
 #
 from aswebcam import logger
 
+CONFIG_DEFAULTS = { 'req_port'   : '2146',
+                    'pub_port'   : '2147',
+                    'interface'  : '0.0.0.0',
+                    'background' : 'true',
+                    'debug'      : 'false',
+                    'logger'     : 'syslog.local2'}
+
 ############################################################################
 #
 def setup_option_parser():
@@ -34,14 +41,7 @@ def setup_option_parser():
     """
     parser = optparse.OptionParser(usage = "%prog [options]",
                                    version = "%prog 0.1")
-    parser.set_defaults(config = "/usr/local/etc/aswebcamd.conf",
-                        req_port = 2146,
-                        pub_port = 2147,
-                        interface = "0.0.0.0",
-                        background = True,
-                        debug = False,
-                        user = None,
-                        logger = "syslog.local2")
+    parser.set_defaults(config = "/usr/local/etc/aswebcamd.conf")
 
     parser.add_option("--config", action="store", dest="config",
                       help = "The path to the config file to use. NOTE: "
@@ -49,20 +49,17 @@ def setup_option_parser():
                       "config file. Default: %default")
     parser.add_option("--debug", action="store_true",dest="debug",
                       help="Turn on debugging options and debugging log "
-                      "output. Default: %default")
+                      "output.")
     parser.add_option("--req_port", action="store", type="int",dest="req_port",
                       help="What port do we listen on for the REQ/REP service "
-                      "used by clients communication with the server."
-                      " Default: %default")
+                      "used by clients communication with the server.")
     parser.add_option("--pub_port", action="store", type="int",dest="pub_port",
                       help="What port does the PUB/SUB service run on used "
-                      "by clients to get video streams from webcams."
-                      " Default: %default")
+                      "by clients to get video streams from webcams.")
     parser.add_option("--interface", action="store",dest="interface",
                       help="What interface do we listen on. Default: %default")
     parser.add_option("--foreground", action="store_false",dest="background",
-                      help = "Does the server daemonize or not. "
-                      "Default: %default")
+                      help = "Does the server daemonize or not.")
     parser.add_option("--user", action="store", dest="user",
                       help="Which user to run as. Only useful as an option "
                       "when run as root and you want to change to a different "
@@ -72,8 +69,7 @@ def setup_option_parser():
                       "syslog.<foo> where <foo> is the syslog service to log "
                       "to, or 'stderr' to log to standard error, 'stdout' "
                       "to log to standard out. Any other string will be "
-                      "considered the path to a file to log to."
-                      " Default: %default")
+                      "considered the path to a file to log to.")
     return parser
 
 ############################################################################
@@ -202,31 +198,37 @@ def main():
     # Now we load the config file as determined by our run time
     # options (or the defaults we get)
     #
-    config = SafeConfigParser()
+    config = SafeConfigParser(CONFIG_DEFAULTS)
     config.read(options.config)
 
     # Now that we have loaded the config, override options that may
     # have been in the config with whatever was set on the command line.
     #
-    # NOTE: all the command line stuff over-rides the 'general' section of the
+    # NOTE: all the command line stuff overrides the 'general' section of the
     #       config (maybe we should call that the 'server' section?)
     #
     if not config.has_section("general"):
         config.add_section("general")
-        
-    config.set("general", "req_port", str(options.req_port))
-    config.set("general", "pub_port", str(options.pub_port))
-    config.set("general", "interface", options.interface)
-    config.set("general", "background", str(options.background).lower())
-    config.set("general", "logger", options.logger)
-    config.set("general", "debug", str(options.debug).lower())
+
+    if options.req_port is not None:
+        config.set("general", "req_port", str(options.req_port))
+    if options.pub_port is not None:
+        config.set("general", "pub_port", str(options.pub_port))
+    if options.interface is not None:
+        config.set("general", "interface", options.interface)
+    if options.background is not None:
+        config.set("general", "background", str(options.background).lower())
+    if options.logger is not None:
+        config.set("general", "logger", options.logger)
+    if options.debug is not None:
+        config.set("general", "debug", str(options.debug).lower())
     if options.user is not None:
         config.set("general", "user", options.user)
 
     # Set up our logger. We set a variable in the logger module that every
     # other module will then use.
     #
-    if config.get("general", "debug"):
+    if config.getboolean("general", "debug"):
         logger.setLevel(logging.DEBUG)
 
     loggertype = config.get("general", "logger").lower()
@@ -261,6 +263,22 @@ def main():
 
     logger.addHandler(handler)
 
+    # Now before we do anything else see if our config file has webcam
+    # sections. There is no point in starting up the server if there
+    # are no webcam sections. In that case we log an error message to
+    # the log file and stderr then exit.
+    #
+    found = False
+    sections = config.sections()
+    for section in sections:
+        if section[:7].lower() == 'webcam ':
+            found = True
+    if not found:
+        logger.error("No 'webcam' sections defined in config file. Exiting.")
+        sys.stderr.write("No 'webcam' sections defined in config file. "
+                         "Exiting.\n")
+        return
+
     if config.has_option("general", "user"):
         logger.info("Changing to the user %s" % config.get("general", "user"))
         become_user(config.get("general", "user"))
@@ -268,6 +286,24 @@ def main():
     if config.getboolean("general", "background"):
         logger.info("Backgrounding to enter daemon mode.")
         become_daemon()
+
+    # Okay Now we can create our aswebcamd server object. This will setup
+    # its zmq sockets and do other such basic housekeeping.
+    #
+    aswebcamd = aswebcam.server.ASWebCamd(config)
+
+    # Now go through our webcam sections and for every one we define
+    # create a webcam and add it to the aswebcam server.
+    #
+    webcams = []
+    for section in sections:
+        if not section[:7].lower() == 'webcam ':
+            continue
+        webcam_name = section[7:].lower()
+        if webcam_name == '':
+            logger.error("Webcam section without a name.")
+            continue
+        logger.info("Setting up webcam '%s'" % webcam_name)
 
     return
 
