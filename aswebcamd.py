@@ -40,6 +40,7 @@ def setup_option_parser():
                         interface = "0.0.0.0",
                         background = True,
                         debug = False,
+                        user = None,
                         logger = "syslog.local2")
 
     parser.add_option("--config", action="store", dest="config",
@@ -62,6 +63,10 @@ def setup_option_parser():
     parser.add_option("--foreground", action="store_false",dest="background",
                       help = "Does the server daemonize or not. "
                       "Default: %default")
+    parser.add_option("--user", action="store", dest="user",
+                      help="Which user to run as. Only useful as an option "
+                      "when run as root and you want to change to a different "
+                      "user.")
     parser.add_option("--logger", action="store",dest="logger",
                       help="Where we do log messages. This should either be "
                       "syslog.<foo> where <foo> is the syslog service to log "
@@ -198,7 +203,7 @@ def main():
     # options (or the defaults we get)
     #
     config = SafeConfigParser()
-    config.read(parser.config)
+    config.read(options.config)
 
     # Now that we have loaded the config, override options that may
     # have been in the config with whatever was set on the command line.
@@ -206,12 +211,17 @@ def main():
     # NOTE: all the command line stuff over-rides the 'general' section of the
     #       config (maybe we should call that the 'server' section?)
     #
-    config.set("general", "req_port", parser.req_port)
-    config.set("general", "pub_port", parser.pub_port)
-    config.set("general", "interface", parser.interface)
-    config.set("general", "background", parser.background)
-    config.set("general", "logger", parser.logger)
-    config.set("general", "debug", parser.debug)
+    if not config.has_section("general"):
+        config.add_section("general")
+        
+    config.set("general", "req_port", str(options.req_port))
+    config.set("general", "pub_port", str(options.pub_port))
+    config.set("general", "interface", options.interface)
+    config.set("general", "background", str(options.background).lower())
+    config.set("general", "logger", options.logger)
+    config.set("general", "debug", str(options.debug).lower())
+    if options.user is not None:
+        config.set("general", "user", options.user)
 
     # Set up our logger. We set a variable in the logger module that every
     # other module will then use.
@@ -219,7 +229,7 @@ def main():
     if config.get("general", "debug"):
         logger.setLevel(logging.DEBUG)
 
-    loggertype = config.get("general", "logger").downcase()
+    loggertype = config.get("general", "logger").lower()
 
     # Warn the user if they have set the logging to go out to stderr or stdout
     # if they are daemonizing because this means they will not see any log
@@ -251,7 +261,11 @@ def main():
 
     logger.addHandler(handler)
 
-    if config.get("general", "background"):
+    if config.has_option("general", "user"):
+        logger.info("Changing to the user %s" % config.get("general", "user"))
+        become_user(config.get("general", "user"))
+
+    if config.getboolean("general", "background"):
         logger.info("Backgrounding to enter daemon mode.")
         become_daemon()
 

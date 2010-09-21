@@ -21,5 +21,5 @@ class NullHandler(logging.Handler):
 # and set up our default global logger
 #
 h = NullHandler()
-logger = logging.getLogger("aswebcam").addHandler(h)
-
+logger = logging.getLogger("aswebcam")
+logger.addHandler(h)
