@@ -66,10 +66,11 @@ def setup_option_parser():
                       "user.")
     parser.add_option("--logger", action="store",dest="logger",
                       help="Where we do log messages. This should either be "
-                      "syslog.<foo> where <foo> is the syslog service to log "
-                      "to, or 'stderr' to log to standard error, 'stdout' "
-                      "to log to standard out. Any other string will be "
-                      "considered the path to a file to log to.")
+                      "syslog.<facility> where <facility> is the "
+                      "syslog facility to log to, or 'stderr' to log to "
+                      "standard error, 'stdout' to log to standard out. "
+                      "Any other string will be considered the path to a "
+                      "file to log to.")
     return parser
 
 ############################################################################
