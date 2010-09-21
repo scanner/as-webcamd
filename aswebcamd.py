@@ -23,6 +23,8 @@ from ConfigParser import SafeConfigParser
 # aswebcamd imports
 #
 from aswebcam import logger
+from aswebcam.server import ASWebCamServer
+from aswebcam.webcam import ASWebCam
 
 CONFIG_DEFAULTS = { 'req_port'   : '2146',
                     'pub_port'   : '2147',
@@ -291,7 +293,10 @@ def main():
     # Okay Now we can create our aswebcamd server object. This will setup
     # its zmq sockets and do other such basic housekeeping.
     #
-    aswebcamd = aswebcam.server.ASWebCamd(config)
+    server_config = { 'req_port'  : config.getint("general", "req_port"),
+                      'pub_port'  : config.getint("general", "pub_port"),
+                      'interface' : config.get("general", "interface")}
+    aswebcamd = ASWebCamServer(**server_config)
 
     # Now go through our webcam sections and for every one we define
     # create a webcam and add it to the aswebcam server.
@@ -305,6 +310,8 @@ def main():
             logger.error("Webcam section without a name.")
             continue
         logger.info("Setting up webcam '%s'" % webcam_name)
+        webcam = ASWebCam(webcam_name, config.get(section, "host"),
+                          config.get(section, "model"))
 
     return
 
