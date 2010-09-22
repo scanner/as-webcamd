@@ -10,6 +10,10 @@ The AS WebCam server logic.
 #
 import logging
 
+# 3rd party libraries
+#
+import zmq
+
 ## Set up our module specific logger
 ##
 logger = logging.getLogger("aswebcam.server")
@@ -51,6 +55,16 @@ class ASWebCamServer(object):
         - `pub_port`: The port to publish our video streams on
         - `interface`: The interface to listen on.
         """
+        # Create the zmq context and our sockets.
+        #
+        self.context = zmq.Context()
+
+        self.rep = self.context.socket(zmq.REP)
+        self.rep.bind("tcp://%s:%d" % (interface, req_port))
+        self.pub = self.context.socket(zmq.PUB)
+        self.pub.bind("tcp://%s:%d" % (interface, pub_port))
+        
+        
         pass
 
     ##################################################################
