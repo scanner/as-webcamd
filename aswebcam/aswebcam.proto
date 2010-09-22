@@ -39,7 +39,7 @@ message TimeStamp
 //
 message WebCam
 {
-  optional id uint32 = 1;
+  optional uint32 id = 1;
   optional string host = 2;
   optional string name = 3;
   optional bool activated = 4;
@@ -50,6 +50,20 @@ message WebCam
   // Number of frames we have received from this webcam.
   //
   optional uint64 number_of_frames = 8;
+
+  // The webcam's current state.. things like is it running normally,
+  // have we not been able to contact the host, did we have an
+  // authentication problem talking to the host, etc.
+  //
+  enum Status 
+  {
+    OK = 0;
+    HOST_AUTH_FAILED = 1;
+    HOST_CONNECT_FAILED = 2;
+    HOST_TIMED_OUT = 3;
+    NO_SUCH_HOST = 4;
+  }
+  optional uint32 status = 9;
 }
 
 // A movie is just a sequences of frames. I debated whether I should

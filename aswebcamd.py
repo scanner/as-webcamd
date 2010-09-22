@@ -311,8 +311,13 @@ def main():
             continue
         logger.info("Setting up webcam '%s'" % webcam_name)
         webcam = ASWebCam(webcam_name, config.get(section, "host"),
-                          config.get(section, "model"))
+                           config.get(section, "model"))
+        aswebcamd.add_webcam(webcam)
 
+    # Okay. everything should be good to go.. Enter the main loop for
+    # the server. When it returns our job is done.
+    #
+    aswebcamd.run()
     return
 
 ############################################################################
