@@ -55,9 +55,14 @@ class ASWebCamServer(object):
 
     ##################################################################
     #
-    def add_webcam(self, webcam):
+    def add_webcam(self, name, ):
         """
         Add a webcam and activate it.
+
+        We use subprocess to spawn a webcam of the appropriate type
+        and also connect up the socket on the server that will
+        subscribe to the webcam's stream of images and a REQ/REP
+        control channel.
 
         Arguments:
         - `webcam`: the webcam we are adding.
