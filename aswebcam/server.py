@@ -42,10 +42,43 @@ class ASWebCamServer(object):
     #
     def __init__(self, req_port = 2146, pub_port = 2147, interface = "0.0.0.0"):
         """
+        Set up our basic structures.
+
+        Create our sockets.
         
         Arguments:
         - `req_port`: The port to listen on for client requests.
         - `pub_port`: The port to publish our video streams on
         - `interface`: The interface to listen on.
+        """
+        pass
+
+    ##################################################################
+    #
+    def add_webcam(self, webcam):
+        """
+        Add a webcam and activate it.
+
+        Arguments:
+        - `webcam`: the webcam we are adding.
+        """
+        pass
+
+    ##################################################################
+    #
+    def run(self):
+        """
+        Our main loop. Basically listen on all of our sockets, as we
+        get frames from the webcam clients put them in to their image
+        ring buffers, and write them to the PUB/SUB socket.
+
+        Listen for commands and carry them out to the best of our ability.
+
+        When we get the SHUTDOWN command shutdown all webcams, close
+        our sockets and return.
+
+        NOTE: You can not call run() again after it exits. State will
+              be all horked up. You need to create a new server object
+              and start all over again.
         """
         pass
