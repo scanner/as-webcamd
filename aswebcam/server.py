@@ -44,7 +44,8 @@ class ASWebCamServer(object):
 
     ##################################################################
     #
-    def __init__(self, req_port = 2146, pub_port = 2147, interface = "0.0.0.0"):
+    def __init__(self, req_port = 2146, pub_port = 2147, webcam_port = 2148,
+                 interface = "0.0.0.0"):
         """
         Set up our basic structures.
 
@@ -63,9 +64,25 @@ class ASWebCamServer(object):
         self.rep.bind("tcp://%s:%d" % (interface, req_port))
         self.pub = self.context.socket(zmq.PUB)
         self.pub.bind("tcp://%s:%d" % (interface, pub_port))
-        
-        
-        pass
+
+        # All of the webcams use a PUSH/PULL mechanism. They push
+        # their images and we pull them (and then re-publish them as a
+        # PUB/SUB).
+        #
+        # The individual command channels for the webcams are created
+        # as we create those webcams so that is not handled here.
+        #
+        # XXX pyzmq still uses UPSTREAM instead of PULL.
+        #
+        self.from_webcams = self.context.socket(zmq.UPSTREAM)
+        self.from_webcams.bind("tcp://%s:%d" % (interface, webcam_port))
+
+        # This is a dict of the webcams that we are getting input
+        # from.  The key is the unique name of the webcam. The value
+        # is the webcam client object.
+        #
+        self.webcams = { }
+        return
 
     ##################################################################
     #

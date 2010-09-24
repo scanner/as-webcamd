@@ -28,6 +28,7 @@ from aswebcam.webcam import ASWebCam
 
 CONFIG_DEFAULTS = { 'req_port'   : '2146',
                     'pub_port'   : '2147',
+                    'webcam_port': '2148',
                     'interface'  : '0.0.0.0',
                     'background' : 'true',
                     'debug'      : 'false',
@@ -58,6 +59,10 @@ def setup_option_parser():
     parser.add_option("--pub_port", action="store", type="int",dest="pub_port",
                       help="What port does the PUB/SUB service run on used "
                       "by clients to get video streams from webcams.")
+    parser.add_option("--webcam_port", action="store", type="int",
+                      dest="webcam_port", help = "The PULL port that the "
+                      "webcam clients connect to. "
+                      "Default: %d" % CONFIG_DEFAULTS['webcam_port'])
     parser.add_option("--interface", action="store",dest="interface",
                       help="What interface do we listen on. Default: %default")
     parser.add_option("--foreground", action="store_false",dest="background",
@@ -293,9 +298,10 @@ def main():
     # Okay Now we can create our aswebcamd server object. This will setup
     # its zmq sockets and do other such basic housekeeping.
     #
-    server_config = { 'req_port'  : config.getint("general", "req_port"),
-                      'pub_port'  : config.getint("general", "pub_port"),
-                      'interface' : config.get("general", "interface")}
+    server_config = { 'req_port'   : config.getint("general", "req_port"),
+                      'pub_port'   : config.getint("general", "pub_port"),
+                      'webcam_port': config.getint("general", "webcam_port"),
+                      'interface'  : config.get("general", "interface")}
     aswebcamd = ASWebCamServer(**server_config)
 
     # Now go through our webcam sections and for every one we define
