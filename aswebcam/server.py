@@ -120,7 +120,7 @@ class ASWebCamServer(object):
         #
         webcam.start()
 
-        # And register this webcam with our poller.
+        # And register the connection to this webcam with our poller.
         #
         self.poller.register(webcam.connection, zmq.POLLIN|zmq.POLLOUT)
         return
