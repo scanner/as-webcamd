@@ -50,7 +50,7 @@ class ASWebCamServer(object):
         Set up our basic structures.
 
         Create our sockets.
-        
+
         Arguments:
         - `req_port`: The port to listen on for client requests.
         - `pub_port`: The port to publish our video streams on
@@ -60,10 +60,17 @@ class ASWebCamServer(object):
         #
         self.context = zmq.Context()
 
+        # Our poller for handling the main loop
+        #
+        self.poller = zmq.Poller()
+
         self.rep = self.context.socket(zmq.REP)
         self.rep.bind("tcp://%s:%d" % (interface, req_port))
+        self.poller.register(self.rep, zmq.POLLIN)
+
         self.pub = self.context.socket(zmq.PUB)
         self.pub.bind("tcp://%s:%d" % (interface, pub_port))
+        self.poller.register(self.pub, zmq.POLLOUT)
 
         # All of the webcams use a PUSH/PULL mechanism. They push
         # their images and we pull them (and then re-publish them as a
@@ -76,6 +83,10 @@ class ASWebCamServer(object):
         #
         self.from_webcams = self.context.socket(zmq.UPSTREAM)
         self.from_webcams.bind("tcp://%s:%d" % (interface, webcam_port))
+        self.poller.register(self.from_webcams, zmq.POLLIN)
+
+        self.webcam_port = webcam_port
+        self.webcam_interface = interface
 
         # This is a dict of the webcams that we are getting input
         # from.  The key is the unique name of the webcam. The value
@@ -86,7 +97,7 @@ class ASWebCamServer(object):
 
     ##################################################################
     #
-    def add_webcam(self, name, ):
+    def add_webcam(self, webcam):
         """
         Add a webcam and activate it.
 
@@ -98,7 +109,21 @@ class ASWebCamServer(object):
         Arguments:
         - `webcam`: the webcam we are adding.
         """
-        pass
+        if webcam.name in self.webcams:
+            raise ValueError("webcam by that name already exists")
+        self.webcams[webcam.name] = webcam
+
+        webcam.set_push_port(self.webcam_port)
+
+        # This should cause it to subprocess and open its connections
+        # back to us and start streaming.
+        #
+        webcam.start()
+
+        # And register this webcam with our poller.
+        #
+        self.poller.register(webcam.connection, zmq.POLLIN|zmq.POLLOUT)
+        return
 
     ##################################################################
     #
@@ -117,4 +142,10 @@ class ASWebCamServer(object):
               be all horked up. You need to create a new server object
               and start all over again.
         """
-        pass
+
+        # Now we loop waiting for things to appear on our sockets.
+        #
+        while True:
+            what = self.poller.poll(100)
+
+        return
